@@ -6,6 +6,6 @@ export default defineConfig({
   test: {
     globals: true,
     root: './',
-    include: ['**/*.spec.ts'],
+    include: ['test/unit/**/*.spec.ts'],
   },
 });
