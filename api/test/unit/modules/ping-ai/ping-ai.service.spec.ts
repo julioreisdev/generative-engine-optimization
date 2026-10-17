@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { BrowserService } from '../../../../src/modules/browser/browser.service.js';
+import { pingAiConfig } from '../../../../src/config/ping-ai.config.js';
 import {
   PING_AI_MESSAGE,
   PingAiService,
@@ -7,60 +7,39 @@ import {
 import {
   AI_CHAT_PROVIDERS,
   AiChatProvider,
+  AskOptions,
 } from '../../../../src/modules/ping-ai/providers/ai-chat-provider.interface.js';
 
-function fakeProvider(
-  name: string,
-  waitForResponse: () => Promise<string>,
-): AiChatProvider {
-  return {
-    name,
-    url: `https://${name}.test/`,
-    waitUntilReady: vi.fn().mockResolvedValue(undefined),
-    sendMessage: vi.fn().mockResolvedValue(undefined),
-    waitForFirstToken: vi.fn().mockResolvedValue(undefined),
-    waitForResponse: vi.fn(waitForResponse),
+type Ask = (message: string, options: AskOptions) => Promise<string>;
+
+function fakeProvider(name: string, ask: Ask) {
+  return { name, ask: vi.fn(ask) } satisfies AiChatProvider;
+}
+
+function answering(text: string): Ask {
+  return (_message, { progress }) => {
+    progress.pageReady();
+    progress.messageSent();
+    progress.firstToken();
+    return Promise.resolve(text);
   };
 }
 
 describe('PingAiService', () => {
-  const page = {
-    goto: vi.fn().mockResolvedValue(undefined),
-    setDefaultTimeout: vi.fn(),
-  };
-  const context = {
-    newPage: vi.fn().mockResolvedValue(page),
-    close: vi.fn().mockResolvedValue(undefined),
-  };
-  const browserService = {
-    newContext: vi.fn().mockResolvedValue(context),
-  };
-
   async function createService(providers: AiChatProvider[]) {
     const module = await Test.createTestingModule({
       providers: [
         PingAiService,
-        { provide: BrowserService, useValue: browserService },
         { provide: AI_CHAT_PROVIDERS, useValue: providers },
+        { provide: pingAiConfig.KEY, useValue: { timeoutMs: 100 } },
       ],
     }).compile();
     return module.get(PingAiService);
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.PING_AI_TIMEOUT_MS = '100';
-  });
-
-  afterAll(() => {
-    delete process.env.PING_AI_TIMEOUT_MS;
-  });
-
   it('should send the message to every provider and return their answers', async () => {
-    const chatgpt = fakeProvider('chatgpt', () => Promise.resolve('Olá!'));
-    const gemini = fakeProvider('gemini', () =>
-      Promise.resolve('Oi, tudo bem?'),
-    );
+    const chatgpt = fakeProvider('chatgpt', answering('Olá!'));
+    const gemini = fakeProvider('gemini', answering('Oi, tudo bem?'));
     const service = await createService([chatgpt, gemini]);
 
     const result = await service.run();
@@ -78,15 +57,15 @@ describe('PingAiService', () => {
         response: 'Oi, tudo bem?',
       }),
     ]);
-    expect(chatgpt.sendMessage).toHaveBeenCalledWith(page, PING_AI_MESSAGE);
-    expect(page.goto).toHaveBeenCalledWith('https://gemini.test/', {
-      waitUntil: 'domcontentloaded',
-    });
+    expect(chatgpt.ask).toHaveBeenCalledWith(
+      PING_AI_MESSAGE,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
-  it('should fill every metric on success', async () => {
+  it('should fill every metric from the provider progress', async () => {
     const service = await createService([
-      fakeProvider('chatgpt', () => Promise.resolve('Olá!')),
+      fakeProvider('chatgpt', answering('Olá!')),
     ]);
 
     const [result] = (await service.run()).results;
@@ -100,10 +79,25 @@ describe('PingAiService', () => {
     });
   });
 
+  it('should keep the metrics reached before a failure', async () => {
+    const service = await createService([
+      fakeProvider('chatgpt', (_message, { progress }) => {
+        progress.pageReady();
+        return Promise.reject(new Error('blocked'));
+      }),
+    ]);
+
+    const [result] = (await service.run()).results;
+
+    expect(result.metrics.pageLoadMs).toEqual(expect.any(Number));
+    expect(result.metrics.timeToFirstTokenMs).toBeNull();
+    expect(result.metrics.responseTimeMs).toBeNull();
+  });
+
   it('should keep the other providers running when one fails', async () => {
     const service = await createService([
       fakeProvider('chatgpt', () => Promise.reject(new Error('blocked'))),
-      fakeProvider('gemini', () => Promise.resolve('Oi!')),
+      fakeProvider('gemini', answering('Oi!')),
     ]);
 
     const result = await service.run();
@@ -115,31 +109,24 @@ describe('PingAiService', () => {
         error: 'blocked',
       }),
     );
-    expect(result.results[0].metrics.responseTimeMs).toBeNull();
     expect(result.results[1]).toEqual(
       expect.objectContaining({ provider: 'gemini', status: 'success' }),
     );
   });
 
-  it('should mark a provider as timeout when it takes too long', async () => {
+  it('should mark a provider as timeout and abort it when it takes too long', async () => {
+    let signal: AbortSignal | undefined;
     const service = await createService([
-      fakeProvider('gemini', () => new Promise(() => undefined)),
+      fakeProvider('gemini', (_message, options) => {
+        signal = options.signal;
+        return new Promise(() => undefined);
+      }),
     ]);
 
     const [result] = (await service.run()).results;
 
     expect(result.status).toBe('timeout');
     expect(result.error).toBe('Timeout after 100ms');
-  });
-
-  it('should close every browser context', async () => {
-    const service = await createService([
-      fakeProvider('chatgpt', () => Promise.resolve('Olá!')),
-      fakeProvider('gemini', () => Promise.reject(new Error('blocked'))),
-    ]);
-
-    await service.run();
-
-    expect(context.close).toHaveBeenCalledTimes(2);
+    expect(signal?.aborted).toBe(true);
   });
 });

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { BaseChatProvider, ChatSelectors } from './base-chat.provider.js';
+import { BrowserChatProvider, ChatSelectors } from './browser-chat.provider.js';
 
 @Injectable()
-export class ChatGptProvider extends BaseChatProvider {
+export class ChatGptProvider extends BrowserChatProvider {
   readonly name = 'chatgpt';
-  readonly url = 'https://chatgpt.com/';
+  protected readonly url = 'https://chatgpt.com/';
   protected readonly selectors: ChatSelectors = {
     input: '#prompt-textarea, #mobile-composer-prompt',
     send: 'button[data-testid="send-button"], button[aria-label="Enviar mensagem"]',

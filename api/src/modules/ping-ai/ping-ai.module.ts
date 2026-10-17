@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { pingAiConfig } from '../../config/ping-ai.config.js';
 import { BrowserModule } from '../browser/browser.module.js';
 import { PingAiController } from './ping-ai.controller.js';
 import { PingAiService } from './ping-ai.service.js';
@@ -7,7 +9,7 @@ import { ChatGptProvider } from './providers/chatgpt.provider.js';
 import { GeminiProvider } from './providers/gemini.provider.js';
 
 @Module({
-  imports: [BrowserModule],
+  imports: [ConfigModule.forFeature(pingAiConfig), BrowserModule],
   controllers: [PingAiController],
   providers: [
     ChatGptProvider,

@@ -1,5 +1,13 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { Browser, BrowserContext, chromium } from 'playwright';
+import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { type ConfigType } from '@nestjs/config';
+import { Browser, chromium } from 'playwright';
+import { browserConfig } from '../../../config/browser.config.js';
+import {
+  BrowserSession,
+  BrowserSessionFactory,
+  BrowserSessionOptions,
+} from '../browser-session.interface.js';
+import { PlaywrightBrowserSession } from './playwright-browser-session.js';
 
 interface LaunchedBrowser {
   browser: Browser;
@@ -7,12 +15,27 @@ interface LaunchedBrowser {
 }
 
 @Injectable()
-export class BrowserService implements OnModuleDestroy {
+export class PlaywrightSessionFactory
+  implements BrowserSessionFactory, OnModuleDestroy
+{
   private launched: Promise<LaunchedBrowser> | null = null;
 
-  async newContext(): Promise<BrowserContext> {
+  constructor(
+    @Inject(browserConfig.KEY)
+    private readonly config: ConfigType<typeof browserConfig>,
+  ) {}
+
+  async createSession(options: BrowserSessionOptions): Promise<BrowserSession> {
     const { browser, userAgent } = await this.getBrowser();
-    return browser.newContext({ locale: 'pt-BR', userAgent });
+    const context = await browser.newContext({ locale: 'pt-BR', userAgent });
+    try {
+      const page = await context.newPage();
+      page.setDefaultTimeout(options.timeoutMs);
+      return new PlaywrightBrowserSession(context, page);
+    } catch (error) {
+      await context.close().catch(() => undefined);
+      throw error;
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -36,8 +59,8 @@ export class BrowserService implements OnModuleDestroy {
 
   private async launch(): Promise<LaunchedBrowser> {
     const browser = await chromium.launch({
-      channel: process.env.BROWSER_CHANNEL ?? 'chrome',
-      headless: process.env.BROWSER_HEADLESS !== 'false',
+      channel: this.config.channel,
+      headless: this.config.headless,
       args: ['--disable-blink-features=AutomationControlled'],
     });
     browser.on('disconnected', () => {

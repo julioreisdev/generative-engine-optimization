@@ -1,6 +1,6 @@
 export class OperationTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`Timeout after ${timeoutMs}ms`);
+  constructor(message: string) {
+    super(message);
     this.name = 'OperationTimeoutError';
   }
 }
@@ -12,7 +12,7 @@ export async function withTimeout<T>(
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new OperationTimeoutError(timeoutMs)),
+      () => reject(new OperationTimeoutError(`Timeout after ${timeoutMs}ms`)),
       timeoutMs,
     );
   });

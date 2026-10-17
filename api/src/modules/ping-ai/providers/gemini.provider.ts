@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { BaseChatProvider, ChatSelectors } from './base-chat.provider.js';
+import { BrowserChatProvider, ChatSelectors } from './browser-chat.provider.js';
 
 @Injectable()
-export class GeminiProvider extends BaseChatProvider {
+export class GeminiProvider extends BrowserChatProvider {
   readonly name = 'gemini';
-  readonly url = 'https://gemini.google.com/app';
+  protected readonly url = 'https://gemini.google.com/app';
   protected readonly selectors: ChatSelectors = {
     input: '.ql-editor[contenteditable="true"]',
     send: 'button.send-button, button[aria-label="Enviar mensagem"]',
