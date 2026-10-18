@@ -1,6 +1,6 @@
 import { BrowserContext, errors, Page } from 'playwright';
 import { OperationTimeoutError } from '../../../common/with-timeout.js';
-import { BrowserSession } from '../browser-session.interface.js';
+import { BrowserSession, PageSnapshot } from '../browser-session.interface.js';
 
 export class PlaywrightBrowserSession implements BrowserSession {
   constructor(
@@ -14,8 +14,10 @@ export class PlaywrightBrowserSession implements BrowserSession {
     );
   }
 
-  async waitForVisible(selector: string): Promise<void> {
-    await this.run(() => this.page.locator(selector).first().waitFor());
+  async waitForVisible(selector: string, timeoutMs?: number): Promise<void> {
+    await this.run(() =>
+      this.page.locator(selector).first().waitFor({ timeout: timeoutMs }),
+    );
   }
 
   async click(selector: string): Promise<void> {
@@ -43,6 +45,14 @@ export class PlaywrightBrowserSession implements BrowserSession {
   async exists(selector: string): Promise<boolean> {
     const count = await this.run(() => this.page.locator(selector).count());
     return count > 0;
+  }
+
+  inspect(): Promise<PageSnapshot> {
+    return this.run(async () => ({
+      url: this.page.url(),
+      title: await this.page.title(),
+      text: await this.page.evaluate(() => document.body?.innerText ?? ''),
+    }));
   }
 
   async pause(ms: number): Promise<void> {

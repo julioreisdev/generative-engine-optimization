@@ -1,6 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { type BlockReason } from '../errors/chat-errors.js';
 
-export type PingAiStatus = 'success' | 'timeout' | 'error';
+export const PING_AI_STATUSES = [
+  'success',
+  'timeout',
+  'blocked',
+  'unavailable',
+  'error',
+] as const;
+
+export type PingAiStatus = (typeof PING_AI_STATUSES)[number];
 
 export class PingAiMetricsDto {
   @ApiProperty({ type: Number, nullable: true, example: 3100 })
@@ -23,7 +32,7 @@ export class PingAiResultDto {
   @ApiProperty({ example: 'chatgpt' })
   provider: string;
 
-  @ApiProperty({ enum: ['success', 'timeout', 'error'], example: 'success' })
+  @ApiProperty({ enum: PING_AI_STATUSES, example: 'success' })
   status: PingAiStatus;
 
   @ApiProperty({
@@ -32,11 +41,24 @@ export class PingAiResultDto {
   })
   warm: boolean;
 
+  @ApiProperty({
+    example: 1,
+    description:
+      'How many times the chat was opened. Metrics refer to the last attempt',
+  })
+  attempts: number;
+
   @ApiPropertyOptional({ example: 'Oi! Como posso ajudar?' })
   response?: string;
 
   @ApiPropertyOptional({ example: 'Timeout after 90000ms' })
   error?: string;
+
+  @ApiPropertyOptional({
+    enum: ['captcha', 'login', 'rate-limit'],
+    description: 'Why the site blocked the access, when status is blocked',
+  })
+  blockReason?: BlockReason;
 
   @ApiProperty({ type: PingAiMetricsDto })
   metrics: PingAiMetricsDto;

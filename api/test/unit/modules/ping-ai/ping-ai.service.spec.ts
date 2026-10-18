@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { pingAiConfig } from '../../../../src/config/ping-ai.config.js';
+import { ChatBlockedError } from '../../../../src/modules/ping-ai/errors/chat-errors.js';
 import {
   PING_AI_MESSAGE,
   PingAiService,
@@ -102,6 +103,28 @@ describe('PingAiService', () => {
     expect(chatgpt.ask).toHaveBeenCalledWith('Oi!', expect.anything());
   });
 
+  it('should report how many attempts each provider needed', async () => {
+    const service = await createService([
+      fakeProvider('chatgpt', (_message, { progress }) => {
+        progress.attemptStarted();
+        progress.attemptStarted();
+        progress.pageReady(false);
+        return Promise.resolve('Olá!');
+      }),
+      fakeProvider('gemini', answering('Oi!')),
+      fakeProvider('claude', (_message, { progress }) => {
+        progress.attemptStarted();
+        progress.attemptStarted();
+        progress.attemptStarted();
+        return Promise.reject(new Error('Cloudflare'));
+      }),
+    ]);
+
+    const result = await service.run();
+
+    expect(result.results.map((item) => item.attempts)).toEqual([2, 1, 3]);
+  });
+
   it('should report whether each provider used a warm page', async () => {
     const service = await createService([
       fakeProvider('chatgpt', (_message, { progress }) => {
@@ -119,6 +142,22 @@ describe('PingAiService', () => {
       false,
       false,
     ]);
+  });
+
+  it('should report a blocked provider with the reason', async () => {
+    const service = await createService([
+      fakeProvider('chatgpt', () =>
+        Promise.reject(new ChatBlockedError('chatgpt', 'captcha')),
+      ),
+    ]);
+
+    const [result] = (await service.run()).results;
+
+    expect(result).toMatchObject({
+      status: 'blocked',
+      blockReason: 'captcha',
+      error: 'chatgpt blocked the access (captcha)',
+    });
   });
 
   it('should keep the metrics reached before a failure', async () => {

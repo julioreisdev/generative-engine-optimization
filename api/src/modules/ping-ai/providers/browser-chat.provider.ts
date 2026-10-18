@@ -10,7 +10,10 @@ import {
   AskOptions,
   PreparableChatProvider,
   PreparedChat,
+  PrepareOptions,
 } from './ai-chat-provider.interface.js';
+import { askThroughPrepare } from './ask-through-prepare.js';
+import { BlockDetector } from './block-detector.js';
 import { BrowserChat } from './browser-chat.js';
 
 export interface ChatSelectors {
@@ -25,6 +28,7 @@ export abstract class BrowserChatProvider implements PreparableChatProvider {
   abstract readonly name: string;
   protected abstract readonly url: string;
   protected abstract readonly selectors: ChatSelectors;
+  protected abstract readonly blockers: BlockDetector[];
 
   constructor(
     @Inject(BROWSER_SESSION_FACTORY)
@@ -33,11 +37,20 @@ export abstract class BrowserChatProvider implements PreparableChatProvider {
     private readonly config: ConfigType<typeof pingAiConfig>,
   ) {}
 
-  async prepare(signal?: AbortSignal): Promise<PreparedChat> {
+  async prepare({
+    signal,
+    onAttempt,
+  }: PrepareOptions = {}): Promise<PreparedChat> {
+    onAttempt?.();
     const session = await this.sessions.createSession({
       timeoutMs: this.config.timeoutMs,
     });
-    const chat = new BrowserChat(session, this.selectors);
+    const chat = new BrowserChat(session, {
+      name: this.name,
+      selectors: this.selectors,
+      blockers: this.blockers,
+      readyTimeoutMs: this.config.pageReadyTimeoutMs,
+    });
     const release = closeOnAbort(signal, chat);
 
     try {
@@ -52,13 +65,7 @@ export abstract class BrowserChatProvider implements PreparableChatProvider {
     }
   }
 
-  async ask(message: string, options: AskOptions): Promise<string> {
-    const chat = await this.prepare(options.signal);
-    try {
-      options.progress.pageReady(false);
-      return await chat.send(message, options);
-    } finally {
-      await chat.close();
-    }
+  ask(message: string, options: AskOptions): Promise<string> {
+    return askThroughPrepare(this, message, options);
   }
 }

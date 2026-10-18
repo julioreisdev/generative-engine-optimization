@@ -4,22 +4,18 @@ import {
   OnApplicationBootstrap,
   OnModuleDestroy,
 } from '@nestjs/common';
-import {
-  AI_CHAT_PROVIDERS,
-  type AiChatProvider,
-} from '../providers/ai-chat-provider.interface.js';
 import { PrewarmedChatProvider } from './prewarmed-chat.provider.js';
+
+export const PREWARMED_CHAT_PROVIDERS = Symbol('PREWARMED_CHAT_PROVIDERS');
 
 @Injectable()
 export class ChatPrewarmer implements OnApplicationBootstrap, OnModuleDestroy {
-  private readonly prewarmed: PrewarmedChatProvider[];
   private started: Promise<void> = Promise.resolve();
 
-  constructor(@Inject(AI_CHAT_PROVIDERS) providers: AiChatProvider[]) {
-    this.prewarmed = providers.filter(
-      (provider) => provider instanceof PrewarmedChatProvider,
-    );
-  }
+  constructor(
+    @Inject(PREWARMED_CHAT_PROVIDERS)
+    private readonly prewarmed: PrewarmedChatProvider[],
+  ) {}
 
   onApplicationBootstrap(): void {
     this.started = Promise.all(

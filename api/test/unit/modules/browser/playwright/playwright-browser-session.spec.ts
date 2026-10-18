@@ -17,6 +17,9 @@ describe('PlaywrightBrowserSession', () => {
     keyboard: { insertText: vi.fn().mockResolvedValue(undefined) },
     waitForFunction: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
+    url: vi.fn(),
+    title: vi.fn(),
+    evaluate: vi.fn(),
   };
   const context = { close: vi.fn().mockResolvedValue(undefined) };
   let session: PlaywrightBrowserSession;
@@ -47,6 +50,24 @@ describe('PlaywrightBrowserSession', () => {
     expect(page.locator).toHaveBeenCalledWith('#send');
     expect(locator.waitFor).toHaveBeenCalledTimes(1);
     expect(locator.click).toHaveBeenCalledTimes(1);
+  });
+
+  it('should wait for an element with a specific timeout', async () => {
+    await session.waitForVisible('#input', 3000);
+
+    expect(locator.waitFor).toHaveBeenCalledWith({ timeout: 3000 });
+  });
+
+  it('should describe the current page', async () => {
+    page.url.mockReturnValue('https://chat.test/');
+    page.title.mockResolvedValue('Um momento…');
+    page.evaluate.mockResolvedValue('Verificando...');
+
+    await expect(session.inspect()).resolves.toEqual({
+      url: 'https://chat.test/',
+      title: 'Um momento…',
+      text: 'Verificando...',
+    });
   });
 
   it('should insert the whole text at once, keeping line breaks', async () => {

@@ -1,13 +1,20 @@
 import { Logger } from '@nestjs/common';
+import { isRetryable } from '../errors/chat-errors.js';
 import {
   AiChatProvider,
   AskOptions,
+  AskProgress,
   PreparableChatProvider,
   PreparedChat,
 } from '../providers/ai-chat-provider.interface.js';
 
+export interface PrewarmGate {
+  allowsTraffic(): boolean;
+}
+
 export interface PrewarmOptions {
   refreshMs: number;
+  gate?: PrewarmGate;
 }
 
 export class PrewarmedChatProvider implements AiChatProvider {
@@ -16,7 +23,7 @@ export class PrewarmedChatProvider implements AiChatProvider {
   private ready: PreparedChat | null = null;
   private preparing: Promise<void> | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
-  private running = false;
+  private stopController: AbortController | null = null;
 
   constructor(
     private readonly inner: PreparableChatProvider,
@@ -30,9 +37,13 @@ export class PrewarmedChatProvider implements AiChatProvider {
     return this.ready !== null;
   }
 
+  private get running(): boolean {
+    return this.stopController !== null;
+  }
+
   start(): Promise<void> {
     if (!this.running) {
-      this.running = true;
+      this.stopController = new AbortController();
       this.refreshTimer = setInterval(
         () => this.refresh(),
         this.options.refreshMs,
@@ -44,7 +55,8 @@ export class PrewarmedChatProvider implements AiChatProvider {
   }
 
   async stop(): Promise<void> {
-    this.running = false;
+    this.stopController?.abort();
+    this.stopController = null;
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
@@ -60,15 +72,46 @@ export class PrewarmedChatProvider implements AiChatProvider {
       if (!chat) {
         return await this.inner.ask(message, options);
       }
-      try {
-        options.progress.pageReady(true);
-        return await chat.send(message, options);
-      } finally {
-        await chat.close();
-      }
+      return await this.askWarm(chat, message, options);
     } finally {
       this.refill();
     }
+  }
+
+  private async askWarm(
+    chat: PreparedChat,
+    message: string,
+    options: AskOptions,
+  ): Promise<string> {
+    let sent = false;
+    const progress: AskProgress = {
+      attemptStarted: () => options.progress.attemptStarted(),
+      pageReady: (warm) => options.progress.pageReady(warm),
+      messageSent: () => {
+        sent = true;
+        options.progress.messageSent();
+      },
+      firstToken: () => options.progress.firstToken(),
+    };
+
+    let failure: unknown;
+    try {
+      progress.attemptStarted();
+      progress.pageReady(true);
+      return await chat.send(message, { signal: options.signal, progress });
+    } catch (error) {
+      if (sent || options.signal.aborted || !isRetryable(error)) {
+        throw error;
+      }
+      failure = error;
+    } finally {
+      await chat.close();
+    }
+
+    this.logger.warn(
+      `Warm page failed before sending (${describe(failure)}). Opening the chat cold`,
+    );
+    return this.inner.ask(message, options);
   }
 
   private take(): PreparedChat | null {
@@ -84,27 +127,37 @@ export class PrewarmedChatProvider implements AiChatProvider {
   }
 
   private refill(): void {
-    if (!this.running || this.ready || this.preparing) {
+    if (!this.stopController || this.ready || this.preparing) {
       return;
     }
+    if (this.options.gate && !this.options.gate.allowsTraffic()) {
+      return;
+    }
+    const { signal } = this.stopController;
     this.preparing = this.inner
-      .prepare()
+      .prepare({ signal })
       .then(
         async (chat) => {
-          if (this.running) {
+          if (this.running && !signal.aborted) {
             this.ready = chat;
           } else {
             await chat.close();
           }
         },
         (error: unknown) => {
-          this.logger.warn(
-            `Could not prepare a warm page: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          if (!signal.aborted) {
+            this.logger.warn(
+              `Could not prepare a warm page: ${describe(error)}`,
+            );
+          }
         },
       )
       .finally(() => {
         this.preparing = null;
       });
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

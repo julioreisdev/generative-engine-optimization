@@ -1,9 +1,6 @@
 import { ChatPrewarmer } from '../../../../../src/modules/ping-ai/prewarm/chat-prewarmer.js';
 import { PrewarmedChatProvider } from '../../../../../src/modules/ping-ai/prewarm/prewarmed-chat.provider.js';
-import {
-  AiChatProvider,
-  PreparableChatProvider,
-} from '../../../../../src/modules/ping-ai/providers/ai-chat-provider.interface.js';
+import { PreparableChatProvider } from '../../../../../src/modules/ping-ai/providers/ai-chat-provider.interface.js';
 
 function prewarmed(name: string) {
   const inner: PreparableChatProvider = {
@@ -18,12 +15,10 @@ function prewarmed(name: string) {
 }
 
 describe('ChatPrewarmer', () => {
-  const plain: AiChatProvider = { name: 'api', ask: vi.fn() };
-
-  it('should start only the prewarmed providers when the app boots', async () => {
+  it('should start every prewarmed provider when the app boots', async () => {
     const chatgpt = prewarmed('chatgpt');
     const gemini = prewarmed('gemini');
-    const prewarmer = new ChatPrewarmer([chatgpt, plain, gemini]);
+    const prewarmer = new ChatPrewarmer([chatgpt, gemini]);
 
     prewarmer.onApplicationBootstrap();
     await prewarmer.ready();
@@ -33,16 +28,16 @@ describe('ChatPrewarmer', () => {
   });
 
   it('should be ready right away when nothing is prewarmed', async () => {
-    const prewarmer = new ChatPrewarmer([plain]);
+    const prewarmer = new ChatPrewarmer([]);
 
     prewarmer.onApplicationBootstrap();
 
     await expect(prewarmer.ready()).resolves.toBeUndefined();
   });
 
-  it('should stop the prewarmed providers when the module is destroyed', async () => {
+  it('should stop every prewarmed provider when the module is destroyed', async () => {
     const chatgpt = prewarmed('chatgpt');
-    const prewarmer = new ChatPrewarmer([chatgpt, plain]);
+    const prewarmer = new ChatPrewarmer([chatgpt]);
 
     await prewarmer.onModuleDestroy();
 

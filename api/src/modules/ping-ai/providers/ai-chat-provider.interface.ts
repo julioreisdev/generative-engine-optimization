@@ -1,6 +1,7 @@
 export const AI_CHAT_PROVIDERS = Symbol('AI_CHAT_PROVIDERS');
 
 export interface AskProgress {
+  attemptStarted(): void;
   pageReady(warm: boolean): void;
   messageSent(): void;
   firstToken(): void;
@@ -21,6 +22,11 @@ export interface PreparedChat {
   close(): Promise<void>;
 }
 
+export interface PrepareOptions {
+  signal?: AbortSignal;
+  onAttempt?: () => void;
+}
+
 export interface PreparableChatProvider extends AiChatProvider {
-  prepare(signal?: AbortSignal): Promise<PreparedChat>;
+  prepare(options?: PrepareOptions): Promise<PreparedChat>;
 }

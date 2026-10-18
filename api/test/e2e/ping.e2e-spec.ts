@@ -13,7 +13,7 @@ describe('PingController (e2e)', () => {
       imports: [AppModule],
     })
       .overrideProvider(pingAiConfig.KEY)
-      .useValue({ timeoutMs: 90000, prewarm: false, prewarmRefreshMs: 600000 })
+      .useValue({ ...pingAiConfig(), prewarm: false })
       .compile();
 
     app = moduleFixture.createNestApplication();

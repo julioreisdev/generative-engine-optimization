@@ -4,15 +4,18 @@ import { AskProgress } from '../providers/ai-chat-provider.interface.js';
 
 export class MetricsRecorder implements AskProgress {
   private readonly total: Stopwatch;
+  private sinceAttempt: Stopwatch;
   private sinceSent: Stopwatch;
+  private attemptCount = 0;
+  private warmPage = false;
   private pageLoadMs: number | null = null;
   private timeToFirstTokenMs: number | null = null;
   private responseTimeMs: number | null = null;
   private responseLength = 0;
-  private warmPage = false;
 
   constructor(private readonly clock: Clock = systemClock) {
     this.total = new Stopwatch(clock);
+    this.sinceAttempt = this.total;
     this.sinceSent = this.total;
   }
 
@@ -20,9 +23,23 @@ export class MetricsRecorder implements AskProgress {
     return this.warmPage;
   }
 
+  get attempts(): number {
+    return Math.max(this.attemptCount, 1);
+  }
+
+  attemptStarted(): void {
+    this.attemptCount++;
+    this.sinceAttempt = new Stopwatch(this.clock);
+    this.sinceSent = this.sinceAttempt;
+    this.warmPage = false;
+    this.pageLoadMs = null;
+    this.timeToFirstTokenMs = null;
+    this.responseTimeMs = null;
+  }
+
   pageReady(warm: boolean): void {
     this.warmPage = warm;
-    this.pageLoadMs = this.total.elapsedMs();
+    this.pageLoadMs = this.sinceAttempt.elapsedMs();
   }
 
   messageSent(): void {

@@ -61,16 +61,19 @@ export class PingAiService {
         provider: provider.name,
         status: 'success',
         warm: recorder.warm,
+        attempts: recorder.attempts,
         response,
         metrics: recorder.finish(),
       };
     } catch (error) {
-      const { status, message } = classifyError(error);
+      const { status, message, blockReason } = classifyError(error);
       return {
         provider: provider.name,
         status,
         warm: recorder.warm,
+        attempts: recorder.attempts,
         error: message,
+        blockReason,
         metrics: recorder.finish(),
       };
     } finally {

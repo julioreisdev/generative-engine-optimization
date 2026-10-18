@@ -15,7 +15,7 @@ async function createApp(prewarm: boolean): Promise<INestApplication<App>> {
     imports: [AppModule],
   })
     .overrideProvider(pingAiConfig.KEY)
-    .useValue({ timeoutMs: 90000, prewarm, prewarmRefreshMs: 600000 })
+    .useValue({ ...pingAiConfig(), prewarm })
     .compile();
   const app = moduleFixture.createNestApplication<INestApplication<App>>();
   await app.init();
@@ -44,6 +44,7 @@ async function callPingAi(
       status: 'success',
     });
     expect(item.response?.length).toBeGreaterThan(0);
+    expect(item.attempts).toBeGreaterThanOrEqual(1);
     expect(item.metrics.responseLength).toBe(item.response?.length);
     expect(item.metrics.pageLoadMs).toBeGreaterThanOrEqual(0);
     expect(item.metrics.timeToFirstTokenMs).toBeGreaterThan(0);
