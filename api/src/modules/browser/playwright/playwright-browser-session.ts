@@ -23,7 +23,7 @@ export class PlaywrightBrowserSession implements BrowserSession {
   }
 
   async type(text: string): Promise<void> {
-    await this.run(() => this.page.keyboard.type(text));
+    await this.run(() => this.page.keyboard.insertText(text));
   }
 
   async waitForText(selector: string): Promise<void> {

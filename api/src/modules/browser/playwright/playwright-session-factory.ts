@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { type ConfigType } from '@nestjs/config';
 import { Browser, chromium } from 'playwright';
 import { browserConfig } from '../../../config/browser.config.js';
@@ -16,9 +16,10 @@ interface LaunchedBrowser {
 
 @Injectable()
 export class PlaywrightSessionFactory
-  implements BrowserSessionFactory, OnModuleDestroy
+  implements BrowserSessionFactory, OnApplicationShutdown
 {
   private launched: Promise<LaunchedBrowser> | null = null;
+  private shutDown = false;
 
   constructor(
     @Inject(browserConfig.KEY)
@@ -26,6 +27,9 @@ export class PlaywrightSessionFactory
   ) {}
 
   async createSession(options: BrowserSessionOptions): Promise<BrowserSession> {
+    if (this.shutDown) {
+      throw new Error('The browser is shut down');
+    }
     const { browser, userAgent } = await this.getBrowser();
     const context = await browser.newContext({ locale: 'pt-BR', userAgent });
     try {
@@ -38,13 +42,15 @@ export class PlaywrightSessionFactory
     }
   }
 
-  async onModuleDestroy(): Promise<void> {
-    if (!this.launched) {
-      return;
-    }
-    const { browser } = await this.launched;
+  async onApplicationShutdown(): Promise<void> {
+    this.shutDown = true;
+    const launched = this.launched;
     this.launched = null;
-    await browser.close();
+    const browser = await launched?.then(
+      (result) => result.browser,
+      () => null,
+    );
+    await browser?.close();
   }
 
   private getBrowser(): Promise<LaunchedBrowser> {

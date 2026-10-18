@@ -9,13 +9,19 @@ export class MetricsRecorder implements AskProgress {
   private timeToFirstTokenMs: number | null = null;
   private responseTimeMs: number | null = null;
   private responseLength = 0;
+  private warmPage = false;
 
   constructor(private readonly clock: Clock = systemClock) {
     this.total = new Stopwatch(clock);
     this.sinceSent = this.total;
   }
 
-  pageReady(): void {
+  get warm(): boolean {
+    return this.warmPage;
+  }
+
+  pageReady(warm: boolean): void {
+    this.warmPage = warm;
     this.pageLoadMs = this.total.elapsedMs();
   }
 

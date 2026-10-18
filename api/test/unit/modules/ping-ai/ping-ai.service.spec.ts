@@ -18,7 +18,7 @@ function fakeProvider(name: string, ask: Ask) {
 
 function answering(text: string): Ask {
   return (_message, { progress }) => {
-    progress.pageReady();
+    progress.pageReady(false);
     progress.messageSent();
     progress.firstToken();
     return Promise.resolve(text);
@@ -79,10 +79,52 @@ describe('PingAiService', () => {
     });
   });
 
+  it('should send a custom message when one is given', async () => {
+    const chatgpt = fakeProvider('chatgpt', answering('Pizzaria X'));
+    const service = await createService([chatgpt]);
+
+    const result = await service.run('Melhores pizzarias em São Paulo?');
+
+    expect(result.message).toBe('Melhores pizzarias em São Paulo?');
+    expect(chatgpt.ask).toHaveBeenCalledWith(
+      'Melhores pizzarias em São Paulo?',
+      expect.anything(),
+    );
+  });
+
+  it('should send "Oi!" when no message is given', async () => {
+    const chatgpt = fakeProvider('chatgpt', answering('Olá!'));
+    const service = await createService([chatgpt]);
+
+    const result = await service.run(undefined);
+
+    expect(result.message).toBe('Oi!');
+    expect(chatgpt.ask).toHaveBeenCalledWith('Oi!', expect.anything());
+  });
+
+  it('should report whether each provider used a warm page', async () => {
+    const service = await createService([
+      fakeProvider('chatgpt', (_message, { progress }) => {
+        progress.pageReady(true);
+        return Promise.resolve('Olá!');
+      }),
+      fakeProvider('gemini', answering('Oi!')),
+      fakeProvider('claude', () => Promise.reject(new Error('blocked'))),
+    ]);
+
+    const result = await service.run();
+
+    expect(result.results.map((item) => item.warm)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
   it('should keep the metrics reached before a failure', async () => {
     const service = await createService([
       fakeProvider('chatgpt', (_message, { progress }) => {
-        progress.pageReady();
+        progress.pageReady(false);
         return Promise.reject(new Error('blocked'));
       }),
     ]);

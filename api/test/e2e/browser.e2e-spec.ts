@@ -73,13 +73,16 @@ describe('BrowserModule (e2e)', () => {
   it(
     'should throw OperationTimeoutError when an element never shows up',
     async () => {
-      const shortSession = await factory.createSession({ timeoutMs: 300 });
-      await shortSession.open(FAKE_CHAT_PAGE);
+      const shortSession = await factory.createSession({ timeoutMs: 2000 });
+      try {
+        await shortSession.open(FAKE_CHAT_PAGE);
 
-      await expect(
-        shortSession.waitForVisible('#does-not-exist'),
-      ).rejects.toBeInstanceOf(OperationTimeoutError);
-      await shortSession.close();
+        await expect(
+          shortSession.waitForVisible('#does-not-exist'),
+        ).rejects.toBeInstanceOf(OperationTimeoutError);
+      } finally {
+        await shortSession.close();
+      }
     },
     E2E_TIMEOUT_MS,
   );

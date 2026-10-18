@@ -26,6 +26,12 @@ export class PingAiResultDto {
   @ApiProperty({ enum: ['success', 'timeout', 'error'], example: 'success' })
   status: PingAiStatus;
 
+  @ApiProperty({
+    example: true,
+    description: 'true when the chat page was already open and ready',
+  })
+  warm: boolean;
+
   @ApiPropertyOptional({ example: 'Oi! Como posso ajudar?' })
   response?: string;
 

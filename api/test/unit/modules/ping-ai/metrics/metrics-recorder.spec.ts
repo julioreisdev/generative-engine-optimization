@@ -11,7 +11,7 @@ describe('MetricsRecorder', () => {
 
   it('should measure every step of a successful answer', () => {
     now = 3000;
-    recorder.pageReady();
+    recorder.pageReady(false);
     now = 3500;
     recorder.messageSent();
     now = 5500;
@@ -29,9 +29,18 @@ describe('MetricsRecorder', () => {
     });
   });
 
+  it('should tell whether the page was already warm', () => {
+    expect(recorder.warm).toBe(false);
+
+    recorder.pageReady(true);
+
+    expect(recorder.warm).toBe(true);
+    expect(recorder.finish().pageLoadMs).toBe(0);
+  });
+
   it('should keep the unreached steps as null', () => {
     now = 3000;
-    recorder.pageReady();
+    recorder.pageReady(false);
     now = 9000;
 
     expect(recorder.finish()).toEqual({

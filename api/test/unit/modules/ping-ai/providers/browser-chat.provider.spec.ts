@@ -21,6 +21,8 @@ class TestChatProvider extends BrowserChatProvider {
   };
 }
 
+const CONFIG = { timeoutMs: 5000, prewarm: false, prewarmRefreshMs: 600000 };
+
 function fakeSession() {
   return {
     open: vi.fn().mockResolvedValue(undefined),
@@ -59,7 +61,7 @@ describe('BrowserChatProvider', () => {
     session = fakeSession();
     factory = { createSession: vi.fn().mockResolvedValue(session) };
     progress = fakeProgress();
-    provider = new TestChatProvider(factory, { timeoutMs: 5000 });
+    provider = new TestChatProvider(factory, CONFIG);
   });
 
   afterEach(() => {
@@ -102,6 +104,7 @@ describe('BrowserChatProvider', () => {
     });
 
     expect(calls).toEqual(['pageReady', 'messageSent', 'firstToken']);
+    expect(progress.pageReady).toHaveBeenCalledWith(false);
   });
 
   it('should wait until the text stops changing and nothing is busy', async () => {
@@ -180,11 +183,66 @@ describe('BrowserChatProvider', () => {
     [ChatGptProvider, 'chatgpt', 'https://chatgpt.com/'],
     [GeminiProvider, 'gemini', 'https://gemini.google.com/app'],
   ])('%o should open its own chat url', async (Provider, name, url) => {
-    const chat = new Provider(factory, { timeoutMs: 5000 });
+    const chat = new Provider(factory, CONFIG);
 
     await chat.ask('Oi!', { signal: new AbortController().signal, progress });
 
     expect(chat.name).toBe(name);
     expect(session.open).toHaveBeenCalledWith(url);
+  });
+
+  describe('prepare', () => {
+    it('should leave the chat open and ready to type, without sending anything', async () => {
+      await provider.prepare();
+
+      expect(session.open).toHaveBeenCalledWith('https://chat.test/');
+      expect(session.waitForVisible).toHaveBeenCalledWith('#input');
+      expect(session.click).not.toHaveBeenCalled();
+      expect(session.type).not.toHaveBeenCalled();
+      expect(session.close).not.toHaveBeenCalled();
+    });
+
+    it('should send the message later through the prepared chat', async () => {
+      const chat = await provider.prepare();
+
+      const answer = await chat.send('Oi!', {
+        signal: new AbortController().signal,
+        progress,
+      });
+
+      expect(answer).toBe('Olá!');
+      expect(session.type).toHaveBeenCalledWith('Oi!');
+      expect(progress.messageSent).toHaveBeenCalled();
+      expect(progress.firstToken).toHaveBeenCalled();
+      expect(progress.pageReady).not.toHaveBeenCalled();
+    });
+
+    it('should close the session when the chat cannot load', async () => {
+      session.waitForVisible.mockRejectedValueOnce(new Error('no input'));
+
+      await expect(provider.prepare()).rejects.toThrow('no input');
+      expect(session.close).toHaveBeenCalled();
+    });
+
+    it('should close the session when aborted while loading', async () => {
+      const controller = new AbortController();
+      session.open.mockImplementationOnce(() => {
+        controller.abort();
+        return Promise.reject(new Error('Target closed'));
+      });
+
+      await expect(provider.prepare(controller.signal)).rejects.toThrow(
+        'Target closed',
+      );
+      expect(session.close).toHaveBeenCalledTimes(2);
+    });
+
+    it('should close the prepared chat when asked', async () => {
+      const chat = await provider.prepare();
+
+      await chat.close();
+
+      expect(session.close).toHaveBeenCalledTimes(1);
+    });
   });
 });

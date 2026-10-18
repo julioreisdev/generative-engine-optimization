@@ -1,5 +1,11 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Query } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
+import { PingAiQueryDto } from './dto/ping-ai-query.dto.js';
 import { PingAiResponseDto } from './dto/ping-ai-response.dto.js';
 import { PingAiService } from './ping-ai.service.js';
 
@@ -10,10 +16,11 @@ export class PingAiController {
 
   @Get()
   @ApiOperation({
-    summary: 'Sends "Oi!" to ChatGPT and Gemini and returns the answers',
+    summary: 'Sends a message to ChatGPT and Gemini and returns the answers',
   })
   @ApiOkResponse({ type: PingAiResponseDto })
-  ping(): Promise<PingAiResponseDto> {
-    return this.pingAiService.run();
+  @ApiBadRequestResponse({ description: 'Blank or too long message' })
+  ping(@Query() query: PingAiQueryDto): Promise<PingAiResponseDto> {
+    return this.pingAiService.run(query.message);
   }
 }

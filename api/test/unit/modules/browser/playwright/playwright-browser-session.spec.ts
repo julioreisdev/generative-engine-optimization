@@ -14,7 +14,7 @@ describe('PlaywrightBrowserSession', () => {
   const page = {
     goto: vi.fn().mockResolvedValue(null),
     locator: vi.fn().mockReturnValue(locator),
-    keyboard: { type: vi.fn().mockResolvedValue(undefined) },
+    keyboard: { insertText: vi.fn().mockResolvedValue(undefined) },
     waitForFunction: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
   };
@@ -49,10 +49,10 @@ describe('PlaywrightBrowserSession', () => {
     expect(locator.click).toHaveBeenCalledTimes(1);
   });
 
-  it('should type with the keyboard', async () => {
-    await session.type('Oi!');
+  it('should insert the whole text at once, keeping line breaks', async () => {
+    await session.type('Oi!\nTudo bem?');
 
-    expect(page.keyboard.type).toHaveBeenCalledWith('Oi!');
+    expect(page.keyboard.insertText).toHaveBeenCalledWith('Oi!\nTudo bem?');
   });
 
   it('should wait for text in the given selector', async () => {

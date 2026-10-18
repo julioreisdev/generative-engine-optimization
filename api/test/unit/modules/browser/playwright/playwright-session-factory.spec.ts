@@ -92,16 +92,43 @@ describe('PlaywrightSessionFactory', () => {
     expect(chromium.launch).toHaveBeenCalledTimes(2);
   });
 
-  it('should close the browser on module destroy', async () => {
+  it('should close the browser on application shutdown', async () => {
     await factory.createSession({ timeoutMs: 1000 });
-    await factory.onModuleDestroy();
+    await factory.onApplicationShutdown();
 
     expect(browser.close).toHaveBeenCalledTimes(1);
   });
 
-  it('should not launch a browser on module destroy if none was opened', async () => {
-    await factory.onModuleDestroy();
+  it('should not launch a browser on shutdown if none was opened', async () => {
+    await factory.onApplicationShutdown();
 
     expect(chromium.launch).not.toHaveBeenCalled();
+  });
+
+  it('should refuse new sessions after shutdown instead of opening another browser', async () => {
+    await factory.createSession({ timeoutMs: 1000 });
+    await factory.onApplicationShutdown();
+
+    await expect(factory.createSession({ timeoutMs: 1000 })).rejects.toThrow(
+      'The browser is shut down',
+    );
+    expect(chromium.launch).toHaveBeenCalledTimes(1);
+  });
+
+  it('should close a browser that was still launching at shutdown', async () => {
+    const creating = factory.createSession({ timeoutMs: 1000 });
+
+    await factory.onApplicationShutdown();
+    await creating.catch(() => undefined);
+
+    expect(browser.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('should shut down quietly when the browser failed to launch', async () => {
+    vi.mocked(chromium.launch).mockRejectedValueOnce(new Error('no chrome'));
+    const creating = factory.createSession({ timeoutMs: 1000 });
+
+    await expect(factory.onApplicationShutdown()).resolves.toBeUndefined();
+    await expect(creating).rejects.toThrow('no chrome');
   });
 });

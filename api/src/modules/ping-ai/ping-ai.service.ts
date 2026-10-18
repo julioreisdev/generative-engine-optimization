@@ -27,14 +27,14 @@ export class PingAiService {
     this.timeoutMs = config.timeoutMs;
   }
 
-  async run(): Promise<PingAiResponseDto> {
+  async run(message: string = PING_AI_MESSAGE): Promise<PingAiResponseDto> {
     const startedAt = new Date().toISOString();
     const stopwatch = new Stopwatch();
     const results = await Promise.all(
-      this.providers.map((provider) => this.runProvider(provider)),
+      this.providers.map((provider) => this.runProvider(provider, message)),
     );
     return {
-      message: PING_AI_MESSAGE,
+      message,
       startedAt,
       totalTimeMs: stopwatch.elapsedMs(),
       results,
@@ -43,13 +43,14 @@ export class PingAiService {
 
   private async runProvider(
     provider: AiChatProvider,
+    message: string,
   ): Promise<PingAiResultDto> {
     const recorder = new MetricsRecorder();
     const controller = new AbortController();
 
     try {
       const response = await withTimeout(
-        provider.ask(PING_AI_MESSAGE, {
+        provider.ask(message, {
           signal: controller.signal,
           progress: recorder,
         }),
@@ -59,6 +60,7 @@ export class PingAiService {
       return {
         provider: provider.name,
         status: 'success',
+        warm: recorder.warm,
         response,
         metrics: recorder.finish(),
       };
@@ -67,6 +69,7 @@ export class PingAiService {
       return {
         provider: provider.name,
         status,
+        warm: recorder.warm,
         error: message,
         metrics: recorder.finish(),
       };

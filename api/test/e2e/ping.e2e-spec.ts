@@ -3,6 +3,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../../src/app.module.js';
+import { pingAiConfig } from '../../src/config/ping-ai.config.js';
 
 describe('PingController (e2e)', () => {
   let app: INestApplication<App>;
@@ -10,7 +11,10 @@ describe('PingController (e2e)', () => {
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(pingAiConfig.KEY)
+      .useValue({ timeoutMs: 90000, prewarm: false, prewarmRefreshMs: 600000 })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     await app.init();

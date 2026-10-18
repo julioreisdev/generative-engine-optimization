@@ -7,6 +7,8 @@ const KEYS = [
   'BROWSER_HEADLESS',
   'BROWSER_CHANNEL',
   'PING_AI_TIMEOUT_MS',
+  'PING_AI_PREWARM',
+  'PING_AI_PREWARM_REFRESH_MS',
 ];
 
 describe('configs', () => {
@@ -25,7 +27,11 @@ describe('configs', () => {
   it('should use the defaults when no env is set', () => {
     expect(appConfig()).toEqual({ port: 3000 });
     expect(browserConfig()).toEqual({ headless: true, channel: 'chrome' });
-    expect(pingAiConfig()).toEqual({ timeoutMs: 90000 });
+    expect(pingAiConfig()).toEqual({
+      timeoutMs: 90000,
+      prewarm: true,
+      prewarmRefreshMs: 600000,
+    });
   });
 
   it('should read the values from env', () => {
@@ -33,9 +39,15 @@ describe('configs', () => {
     process.env.BROWSER_HEADLESS = 'false';
     process.env.BROWSER_CHANNEL = 'msedge';
     process.env.PING_AI_TIMEOUT_MS = '30000';
+    process.env.PING_AI_PREWARM = 'false';
+    process.env.PING_AI_PREWARM_REFRESH_MS = '120000';
 
     expect(appConfig()).toEqual({ port: 4000 });
     expect(browserConfig()).toEqual({ headless: false, channel: 'msedge' });
-    expect(pingAiConfig()).toEqual({ timeoutMs: 30000 });
+    expect(pingAiConfig()).toEqual({
+      timeoutMs: 30000,
+      prewarm: false,
+      prewarmRefreshMs: 120000,
+    });
   });
 });
